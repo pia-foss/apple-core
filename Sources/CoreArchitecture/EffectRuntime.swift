@@ -1,20 +1,16 @@
 import Foundation
 
-/// Namespace for the machinery that executes `Effect`s. Not a type anyone instantiates — `enum` with
-/// no cases so it cannot be.
+/// Namespace for the machinery that executes effects.
 ///
-/// It exists so effect semantics live in exactly one place, shared by `Store` (whose sink applies
-/// actions immediately) and `TestStore` (whose sink queues them for the test). Cancellation therefore
-/// behaves identically under test and in the app, which is the only reason a `TestStore` is worth
-/// having.
+/// A caseless `enum`, so nothing can instantiate it. Effect semantics live here alone, shared by
+/// `Store` and `TestStore` so that cancellation behaves identically in an app and under test.
 enum EffectRuntime {
 
     /// Identifies a tracked effect task.
     ///
-    /// `explicit` keys come from the `id` a reducer attached and are what `.cancel(id:)` targets.
-    /// `anonymous` keys are minted for effects that opted out of cancellation: no reducer can name
-    /// them, but the runtime still needs a handle to await them (`TestStore.finish()`) and to tear
-    /// them down when the store goes away.
+    /// `explicit` keys come from the `id` a reducer attached and are what cancellation targets.
+    /// `anonymous` keys are minted for effects that opted out: no reducer can name them, but the
+    /// runtime still needs a handle to await them and to tear them down.
     enum TaskKey: Hashable {
         case explicit(AnyHashable)
         case anonymous(UInt64)
@@ -24,25 +20,26 @@ enum EffectRuntime {
     ///
     /// A reference type rather than stored state on `Store` so that `Store.deinit` — which is not
     /// main-actor isolated — can still cancel outstanding work. Every other access happens on the
-    /// main actor, and `Task.cancel()` is safe to call from any thread; together that is what makes
-    /// the `@unchecked Sendable` conformance sound rather than merely convenient.
+    /// main actor, and `Task.cancel()` is safe from any thread; together that is what makes the
+    /// `@unchecked Sendable` conformance sound rather than merely convenient.
     final class Tasks: @unchecked Sendable {
 
-        /// One entry per key. `token` identifies the generation, so a task that finishes late never
-        /// evicts the newer task that already replaced it under the same key.
+        /// One entry per key.
+        ///
+        /// `token` identifies the generation, so a task that finishes late never evicts the newer
+        /// task that already replaced it under the same key.
         private var entries: [TaskKey: (token: UInt64, task: Task<Void, Never>)] = [:]
         private var nextToken: UInt64 = 0
 
         var isEmpty: Bool { entries.isEmpty }
 
-        /// Reserves the next generation token. Also the source of `anonymous` key uniqueness.
+        /// Reserves the next generation token, which also gives `anonymous` keys their uniqueness.
         func makeToken() -> UInt64 {
             nextToken += 1
             return nextToken
         }
 
-        /// Tracks `task` under `key`, cancelling whatever was in flight under the same key — the
-        /// "same id means one at a time, latest wins" rule documented on `Effect`.
+        /// Tracks `task` under `key`, cancelling whatever was in flight under the same key.
         func register(_ task: Task<Void, Never>, key: TaskKey, token: UInt64) {
             entries[key]?.task.cancel()
             entries[key] = (token, task)
@@ -68,7 +65,7 @@ enum EffectRuntime {
         }
     }
 
-    /// Executes `effect`, tracking any spawned work in `tasks` and routing the actions it produces to
+    /// Executes `effect`, tracking spawned work in `tasks` and routing the actions it produces to
     /// `sink`.
     @MainActor
     static func run<Action>(
@@ -88,8 +85,8 @@ enum EffectRuntime {
         case .run(let id, let work):
             let token = tasks.makeToken()
             let key = id.map(TaskKey.explicit) ?? .anonymous(token)
-            // Inherits the main actor from this isolated function, matching `work`'s own isolation.
-            // Enqueued on the main actor, so it cannot begin before `register` below runs.
+            // Inherits the main actor from this isolated function, matching `work`'s own isolation,
+            // and is enqueued there — so it cannot begin before `register` below runs.
             let task = Task {
                 await work(sink)
                 tasks.finish(key: key, token: token)

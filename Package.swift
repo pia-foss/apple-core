@@ -5,9 +5,13 @@ import PackageDescription
 
 let package = Package(
     name: "CoreArchitecture",
+    // The sources import only Foundation and Combine, so every Apple platform is supported.
     platforms: [
         .iOS(.v15),
-        .macOS(.v12)
+        .macOS(.v12),
+        .tvOS(.v15),
+        .watchOS(.v8),
+        .visionOS(.v1)
     ],
     products: [
         .library(

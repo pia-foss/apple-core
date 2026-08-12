@@ -2,47 +2,36 @@
 
     import Foundation
 
-    /// A deterministic driver for a reducer under test — the safety net ADR 0010 names as missing.
+    /// A deterministic driver for exercising a reducer and its effects in tests.
     ///
-    /// It runs the same reducer and the same effect machinery as `Store`, so cancellation and
-    /// merging behave identically under test and in the app. The one difference is deliberate:
-    /// actions produced by effects are **queued rather than applied**. The test decides when to let
-    /// them in, which is what makes an async round-trip assertable instead of raced.
+    /// Runs the same reducer and effect machinery as `Store`, so cancellation and merging behave
+    /// identically. The one difference is deliberate: actions produced by effects are queued rather
+    /// than applied, and the test decides when to let them in — which is what makes an async
+    /// round-trip assertable instead of raced.
     ///
-    /// ```swift
-    /// let store = TestStore(
-    ///     initial: WelcomeBackState(subscription: subscription),
-    ///     reduce: WelcomeBackReducer(deps: .init(recover: { _ in .signedIn }, track: spy.track)).reduce
-    /// )
-    ///
-    /// store.send(.recoverTapped)                              // reducer runs synchronously
-    /// XCTAssertEqual(store.state.phase, .recovering)
-    ///
-    /// let action = await store.receive()                      // the effect's follow-up, applied
-    /// XCTAssertEqual(action, .recoverResult(.signedIn))
-    /// XCTAssertEqual(store.state.phase, .recovered)
-    ///
-    /// await store.finish()                                    // drain fire-and-forget work
-    /// XCTAssertEqual(spy.events, [.recoverTapped, .recoverSucceeded])
-    /// ```
-    ///
-    /// `DEBUG`-only, so it costs nothing in a release build. Test targets compile in Debug, which is
-    /// where it is needed.
+    /// - Note: `DEBUG`-only, so it costs nothing in a release build.
     @MainActor
     public final class TestStore<State, Action> {
 
         /// The current state, after every action the test has sent or received.
         public private(set) var state: State
 
+        /// Actions produced by effects that `receive(timeout:)` has not consumed.
+        ///
+        /// Assert this is zero at the end of a test to catch an effect that fired more than expected.
+        public var unconsumedActionCount: Int { queued.count }
+
         private let _reduce: (inout State, Action) -> Effect<Action>?
         private let tasks = EffectRuntime.Tasks()
-
-        /// Actions produced by effects that `receive(timeout:)` has not consumed yet.
         private var queued: [Action] = []
-
         private var waiter: CheckedContinuation<Action?, Never>?
         private var timeoutTask: Task<Void, Never>?
 
+        /// Creates a test store seeded with `initial`, reducing actions with `reduce`.
+        ///
+        /// - Parameters:
+        ///   - initial: The state the feature starts in.
+        ///   - reduce: The reducer under test.
         public init(initial: State, reduce: @escaping (inout State, Action) -> Effect<Action>?) {
             self.state = initial
             self._reduce = reduce
@@ -52,19 +41,20 @@
             tasks.cancelAll()
         }
 
-        /// Sends an action as the user would: runs the reducer synchronously and starts any effect
-        /// it returns. Assert on `state` immediately afterwards to check the synchronous mutation.
+        /// Sends an action as a view would, running the reducer and starting any effect it returns.
+        ///
+        /// Assert on `state` immediately afterwards to check the synchronous mutation.
         public func send(_ action: Action) {
             guard let effect = _reduce(&state, action) else { return }
             start(effect)
         }
 
-        /// Waits for the next action an effect produced, applies it through the reducer, and returns
-        /// it so the test can assert what it was.
+        /// Waits for the next action an effect produced, applies it, and returns it for assertion.
         ///
-        /// Returns `nil` if `timeout` elapses first; asserting the result is non-`nil` turns a
-        /// missing action into a readable failure. Kept free of any XCTest dependency so the type
-        /// works from both XCTest and Swift Testing.
+        /// Takes no XCTest dependency, so it serves XCTest and Swift Testing alike.
+        ///
+        /// - Parameter timeout: Seconds to wait before giving up.
+        /// - Returns: The action applied, or `nil` if `timeout` elapsed first.
         public func receive(timeout: TimeInterval = 1) async -> Action? {
             let action: Action?
             if queued.isEmpty {
@@ -79,20 +69,16 @@
             return action
         }
 
-        /// Actions an effect has produced that no `receive(timeout:)` has consumed. Assert this is
-        /// zero at the end of a test to catch an effect that fired more than expected.
-        public var unconsumedActionCount: Int { queued.count }
-
-        /// Waits for in-flight effects to finish, then cancels anything left — a `.stream` effect
-        /// never finishes on its own.
+        /// Waits for in-flight effects to finish, then cancels whatever is left.
         ///
-        /// Use it to drain fire-and-forget work (analytics, persistence) before asserting on a spy.
-        /// Actions still queued are left in place for `receive(timeout:)`.
+        /// Drains fire-and-forget work before asserting on a spy. A `stream` effect never finishes on
+        /// its own, hence the cancel. Queued actions are left for `receive(timeout:)`.
+        ///
+        /// - Parameter timeout: Seconds to wait before cancelling.
         public func finish(timeout: TimeInterval = 1) async {
             let deadline = Date().addingTimeInterval(timeout)
-            // Polls rather than awaiting each task: tasks self-deregister as they complete, and the
-            // set can grow while we wait (one effect starting another). 1ms keeps the main actor
-            // free without adding meaningful latency to a test.
+            // Polls rather than awaiting each task, because tasks self-deregister as they complete and
+            // the set can grow while we wait — one effect may start another.
             while !tasks.isEmpty && Date() < deadline {
                 try? await Task.sleep(nanoseconds: 1_000_000)
             }
