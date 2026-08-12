@@ -135,8 +135,10 @@ final class StoreTests: XCTestCase {
 
     private static let streamID = "stream"
 
-    /// A stream that emits three ticks and then parks. Parking lets a later action cancel it, and
-    /// the generation number makes it visible *which* stream reported.
+    /// A stream that emits three ticks and then parks.
+    ///
+    /// Parking lets a later action cancel it, and the generation number makes it visible *which*
+    /// stream reported.
     private func reduceStream(
         _ state: inout StreamState,
         _ action: StreamAction
@@ -242,8 +244,9 @@ final class StoreTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Polls `condition` on the main actor until it holds or the timeout elapses. Avoids depending
-    /// on wall-clock sleeps for the effect round-trip.
+    /// Polls `condition` on the main actor until it holds or the timeout elapses.
+    ///
+    /// Avoids depending on wall-clock sleeps for the effect round-trip.
     private func waitFor(
         timeout: TimeInterval = 2,
         _ condition: @escaping () -> Bool

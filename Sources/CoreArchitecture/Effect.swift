@@ -39,6 +39,7 @@ public struct Effect<Action> {
     /// - Parameters:
     ///   - id: Opts the work into cancellation. Omit when it never needs cancelling.
     ///   - work: Returns the action to dispatch, or `nil` to produce none.
+    /// - Returns: An effect that dispatches `work`'s action, if it produces one.
     public static func task(
         id: AnyHashable? = nil,
         _ work: @escaping @MainActor () async -> Action?
@@ -60,6 +61,7 @@ public struct Effect<Action> {
     /// - Parameters:
     ///   - id: Opts the work into cancellation. Omit when it never needs cancelling.
     ///   - work: Performs the side effect.
+    /// - Returns: An effect that performs `work` and produces no action.
     public static func fireAndForget(
         id: AnyHashable? = nil,
         _ work: @escaping @MainActor () async -> Void
@@ -76,6 +78,7 @@ public struct Effect<Action> {
     ///   - id: Required rather than defaulted: a stream nobody can cancel runs until the store is
     ///     torn down.
     ///   - work: Emits actions through the sink it is given, until cancelled.
+    /// - Returns: An effect that runs `work` until it completes or is cancelled.
     public static func stream(
         id: AnyHashable,
         _ work: @escaping @MainActor (Send) async -> Void

@@ -25,9 +25,12 @@
     },
     "rules": {
         "OrderedImports": true,
-        "UseTripleSlashForDocumentationComments": false,
-        "NoBlockComments": false,
+        "UseTripleSlashForDocumentationComments": true,
+        "NoBlockComments": true,
         "NoAssignmentInExpressions": false,
-        "FileScopedDeclarationPrivacy": false
+        "FileScopedDeclarationPrivacy": false,
+        "BeginDocumentationCommentWithOneLineSummary": true,
+        "ValidateDocumentationComments": true,
+        "AllPublicDeclarationsHaveDocumentation": true
     }
 }
