@@ -46,20 +46,43 @@ Every guarantee this library offers rests on these. They are not style preferenc
 `State`, `Action`, `Reducer` and `Dependencies` are **not** here. They are per-feature types that live
 with the feature. This library only provides what they plug into.
 
+## The demo
+
+[`Sources/SpaceshipDemo`](Sources/SpaceshipDemo) is a complete, compiling feature — a spaceship launch,
+chosen because its phases need genuinely different effect shapes: pre-flight checks (`task`), telemetry
+(`fireAndForget`), a countdown and an ascent (`stream`, under separate ids), launch (`merge`), and abort
+(`cancel`). Its tests show both testing styles.
+
+To see it: open `Package.swift` in Xcode, **select the `SpaceshipDemo` scheme**, open
+`SpaceshipView.swift`, show the canvas (`⌥⌘↩`). The scheme matters — previews only run for a file the
+active scheme compiles. Or run `swift test --filter SpaceshipDemoTests` for the logic alone.
+
+**[The demo's own README](Sources/SpaceshipDemo/README.md)** is the guided tour: which file to read
+first, where each effect factory appears, how the tests are structured, and what the demo deliberately
+leaves out. This file explains the pattern; that one explains where to see it.
+
+The demo builds with the package, so it cannot drift from the library, and it is deliberately **not** a
+product — depending on this package does not expose it.
+
 ## Writing a feature
 
-`State` and `Action` are plain values:
+Group a feature's types under a caseless `enum` namespace. Its own files can then say `State` and
+`Action` without repeating the prefix, and `Feature.` lists everything in autocomplete:
 
 ```swift
-public struct ItemsState: Equatable {
-    public var items: [Item] = []
-    public var isLoading = false
-}
+public enum Items {}
 
-public enum ItemsAction: Equatable {
-    case onAppear
-    case refreshTapped
-    case itemsLoaded([Item])
+extension Items {
+    public struct State: Equatable {
+        public var items: [Item] = []
+        public var isLoading = false
+    }
+
+    public enum Action: Equatable {
+        case onAppear
+        case refreshTapped
+        case itemsLoaded([Item])
+    }
 }
 ```
 
@@ -67,46 +90,51 @@ public enum ItemsAction: Equatable {
 collaborators shared across features, typed closures for one-offs:
 
 ```swift
-public struct ItemsDependencies {
-    public var items: any ItemRepository
-    public var track: (AnalyticsEvent) -> Void
+extension Items {
+    public struct Dependencies {
+        public var items: any ItemRepository
+        public var track: (AnalyticsEvent) -> Void
+    }
 }
 ```
 
 `Reducer` is a struct that captures its dependencies at init and mutates state in exactly one place:
 
 ```swift
-public struct ItemsReducer {
-    public let deps: ItemsDependencies
+extension Items {
+    public struct Reducer {
+        public let deps: Dependencies
 
-    public func reduce(_ state: inout ItemsState, _ action: ItemsAction) -> Effect<ItemsAction>? {
-        switch action {
-        case .onAppear:
-            state.isLoading = true
-            return .task { [deps] in .itemsLoaded((try? await deps.items.all()) ?? []) }
+        public func reduce(_ state: inout State, _ action: Action) -> Effect<Action>? {
+            switch action {
+            case .onAppear:
+                state.isLoading = true
+                return .task { [deps] in .itemsLoaded((try? await deps.items.all()) ?? []) }
 
-        case .refreshTapped:
-            // Analytics is I/O, so it goes out as an effect rather than being called inline.
-            return .merge(
-                .fireAndForget { [deps] in deps.track(.refreshTapped) },
-                .task { [deps] in .itemsLoaded((try? await deps.items.all()) ?? []) }
-            )
+            case .refreshTapped:
+                // Analytics is I/O, so it goes out as an effect rather than being called inline.
+                return .merge(
+                    .fireAndForget { [deps] in deps.track(.refreshTapped) },
+                    .task { [deps] in .itemsLoaded((try? await deps.items.all()) ?? []) }
+                )
 
-        case .itemsLoaded(let items):
-            state.isLoading = false
-            state.items = items
-            return nil
+            case .itemsLoaded(let items):
+                state.isLoading = false
+                state.items = items
+                return nil
+            }
         }
     }
 }
 ```
 
-The view owns the store, reads state, and sends actions. Sub-views take a state slice plus a `send`
-closure as plain arguments, so they never know a `Store` exists:
+The view stays outside the namespace, because it is the per-app layer while the namespace is the
+shareable part. It owns the store, reads state, and sends actions. Sub-views take a state slice plus a
+`send` closure as plain arguments, so they never know a `Store` exists:
 
 ```swift
 struct ItemsView: View {
-    @StateObject var store: Store<ItemsState, ItemsAction>
+    @StateObject var store: Store<Items.State, Items.Action>
 
     var body: some View {
         List(store.state.items) { item in
@@ -121,7 +149,7 @@ Wire dependencies twice: a live value for the app, fakes for tests. The reducer 
 got.
 
 ```swift
-extension ItemsDependencies {
+extension Items.Dependencies {
     static var live: Self {
         .init(items: DefaultItemRepository(), track: { AnalyticsClient.shared.track($0) })
     }
@@ -190,8 +218,8 @@ A reducer is a pure function, so the cheapest test calls it directly — no runt
 when the claim is about the synchronous mutation, or about *whether* an effect was returned:
 
 ```swift
-var state = ItemsState()
-let effect = ItemsReducer(deps: .test).reduce(&state, .onAppear)
+var state = Items.State()
+let effect = Items.Reducer(deps: .test).reduce(&state, .onAppear)
 
 XCTAssertTrue(state.isLoading)
 XCTAssertNotNil(effect)
@@ -207,8 +235,8 @@ to let them in. That is what makes the round-trip assertable instead of raced.
 func test_refresh() async {
     let spy = Spy()
     let store = TestStore(
-        initial: ItemsState(),
-        reduce: ItemsReducer(deps: .init(items: FakeRepository(), track: spy.track)).reduce
+        initial: Items.State(),
+        reduce: Items.Reducer(deps: .init(items: FakeRepository(), track: spy.track)).reduce
     )
 
     store.send(.refreshTapped)
@@ -251,7 +279,7 @@ final class ItemsCoordinator: Coordinator {
     var output: AnyPublisher<Output, Never> { subject.eraseToAnyPublisher() }
 
     func start() {
-        let store = Store(initial: ItemsState(), reduce: ItemsReducer(deps: .live).reduce)
+        let store = Store(initial: Items.State(), reduce: Items.Reducer(deps: .live).reduce)
         let view = ItemsView(store: store) { [weak self] item in
             self?.subject.send(.didSelect(item))
         }
