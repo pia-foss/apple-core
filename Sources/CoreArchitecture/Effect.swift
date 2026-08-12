@@ -1,6 +1,6 @@
 import Foundation
 
-/// A description of asynchronous work returned by a reducer.
+/// A definition of asynchronous work returned by a reducer.
 ///
 /// A reducer stays pure by returning an effect rather than performing I/O itself; the runtime runs it
 /// off the reduce cycle and feeds the actions it produces back in. Build effects with `task`,
@@ -34,7 +34,7 @@ public struct Effect<Action> {
 
     /// Wraps one-shot work that produces a single follow-up action.
     ///
-    /// The common case: a fetch, a submit, a purchase.
+    /// The common case: a fetch, a submit
     ///
     /// - Parameters:
     ///   - id: Opts the work into cancellation. Omit when it never needs cancelling.

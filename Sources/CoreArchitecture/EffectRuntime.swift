@@ -1,9 +1,9 @@
 import Foundation
 
-/// Namespace for the machinery that executes effects.
+/// The machinery that executes effects.
 ///
-/// A caseless `enum`, so nothing can instantiate it. Effect semantics live here alone, shared by
-/// `Store` and `TestStore` so that cancellation behaves identically in an app and under test.
+/// Effect semantics live here alone, shared by `Store` and `TestStore` so that cancellation behaves
+/// identically in an app and under test.
 enum EffectRuntime {
 
     /// Identifies a tracked effect task.

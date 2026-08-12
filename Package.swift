@@ -34,11 +34,17 @@ let package = Package(
             name: "CoreArchitectureTests",
             dependencies: ["CoreArchitecture"]
         ),
-        // A worked example. It builds and is tested with the package, so it cannot drift from the
-        // library.
+        // A worked example. One target, with `SpaceshipFeature/` and `SpaceshipUI/` holding the two layers
+        // ADR 0010 separates: shared logic and per-app views.
+        //
+        // The folders are a convention, not a boundary the compiler checks — a view and a reducer in one
+        // target can reference each other freely. Splitting them into two targets would make the
+        // dependency direction a build error; keeping one keeps the demo to a single scheme.
         .target(
             name: "SpaceshipDemo",
-            dependencies: ["CoreArchitecture"]
+            dependencies: ["CoreArchitecture"],
+            // The walkthrough lives beside the code it describes; it is documentation, not a resource.
+            exclude: ["README.md"]
         ),
         .testTarget(
             name: "SpaceshipDemoTests",

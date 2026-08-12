@@ -38,7 +38,7 @@ Every guarantee this library offers rests on these. They are not style preferenc
 
 | Type | Role |
 |---|---|
-| `Store<State, Action>` | `@MainActor ObservableObject`. Holds state, runs `send`, executes effects, feeds their actions back. |
+| `Store<State, Action>` | `@MainActor ObservableObject`. Holds state, runs `send`, executes effects, feeds their actions back. Supplies `binding(_:send:)` for SwiftUI controls. |
 | `Effect<Action>` | A description of async work a reducer returns. Cancellable by id. |
 | `TestStore<State, Action>` | Deterministic test driver. Same effect machinery, but effect output is queued for the test. `DEBUG`-only. |
 | `Coordinator` | The navigation contract: `func start()`. |
@@ -48,10 +48,13 @@ with the feature. This library only provides what they plug into.
 
 ## The demo
 
-[`Sources/SpaceshipDemo`](Sources/SpaceshipDemo) is a complete, compiling feature — a spaceship launch,
-chosen because its phases need genuinely different effect shapes: pre-flight checks (`task`), telemetry
-(`fireAndForget`), a countdown and an ascent (`stream`, under separate ids), launch (`merge`), and abort
-(`cancel`). Its tests show both testing styles.
+[`Sources/SpaceshipDemo`](Sources/SpaceshipDemo) is a complete, compiling two-screen feature: pick a ship
+from the fleet, then launch it. It was chosen because its moments need genuinely different effect shapes
+— pre-flight checks (`task`), telemetry (`fireAndForget`), a countdown and an ascent (`stream`, under
+separate ids), launch (`merge`), and both abort and leaving the screen (`cancel`).
+
+The route lives in state, so navigation is a reducer transition and its tests assert it without a view.
+Each screen carries a focused action set: two on the master, three on the detail.
 
 To see it: open `Package.swift` in Xcode, **select the `SpaceshipDemo` scheme**, open
 `SpaceshipView.swift`, show the canvas (`⌥⌘↩`). The scheme matters — previews only run for a file the
@@ -87,12 +90,14 @@ extension Items {
 ```
 
 `Dependencies` is a struct of the collaborators that keep the reducer pure. Protocols for
-collaborators shared across features, typed closures for one-offs:
+collaborators shared across features, typed closures for one-offs. Name each one for what it *is* —
+`state.items` is an array and `deps.itemRepository` is a repository, and a shared name would read like the
+wrong one at every call site:
 
 ```swift
 extension Items {
     public struct Dependencies {
-        public var items: any ItemRepository
+        public var itemRepository: any ItemRepository
         public var track: (AnalyticsEvent) -> Void
     }
 }
@@ -109,13 +114,13 @@ extension Items {
             switch action {
             case .onAppear:
                 state.isLoading = true
-                return .task { [deps] in .itemsLoaded((try? await deps.items.all()) ?? []) }
+                return .task { [deps] in .itemsLoaded((try? await deps.itemRepository.all()) ?? []) }
 
             case .refreshTapped:
                 // Analytics is I/O, so it goes out as an effect rather than being called inline.
                 return .merge(
                     .fireAndForget { [deps] in deps.track(.refreshTapped) },
-                    .task { [deps] in .itemsLoaded((try? await deps.items.all()) ?? []) }
+                    .task { [deps] in .itemsLoaded((try? await deps.itemRepository.all()) ?? []) }
                 )
 
             case .itemsLoaded(let items):
@@ -151,10 +156,40 @@ got.
 ```swift
 extension Items.Dependencies {
     static var live: Self {
-        .init(items: DefaultItemRepository(), track: { AnalyticsClient.shared.track($0) })
+        .init(itemRepository: DefaultItemRepository(), track: { AnalyticsClient.shared.track($0) })
     }
 }
 ```
+
+## Bindings for text fields, toggles and sliders
+
+`state` is `private(set)`, so `$store.state.email` will not compile — and that is the point. A binding
+straight into state would write without passing the reducer, which breaks the first invariant.
+
+Use `binding(_:send:)`. The getter reads state; the setter sends an action:
+
+```swift
+TextField("Email", text: store.binding(\.email) { .emailChanged($0) })
+Toggle("Remember me", isOn: store.binding(\.remembersMe) { .rememberMeToggled($0) })
+Slider(value: store.binding(\.thrust) { .thrustChanged($0) }, in: 0...100)
+```
+
+The edit still travels through the reducer, so it is still a plain unit test:
+
+```swift
+var state = Login.State()
+_ = Login.Reducer(deps: .test).reduce(&state, .emailChanged("pilot@example.com"))
+XCTAssertEqual(state.email, "pilot@example.com")
+```
+
+Two things to know:
+
+- **One action per edit.** A `TextField` sends one on every keystroke and a `Slider` one per drag
+  increment. That is intended — each is a named, auditable mutation — but expensive work the reducer
+  triggers belongs in an effect with an `id`, so a later edit debounces the earlier one.
+- **One action case per field, deliberately.** There is no generated-binding machinery here (TCA's
+  `BindableAction` / `@BindingState`). The cost is a case per editable field; the return is that every
+  mutation has a name you can search for, assert on, and see in a reducer's `switch`.
 
 ## Effects
 
@@ -337,4 +372,6 @@ for subviews.
   `Store`, since views read `store.state` without knowing the mechanism.
 - **No `scope` or `pullback`.** Composition is by plain arguments: a sub-view takes a state slice and a
   `send` closure. Deliberate, not missing.
+- **SwiftUI is imported in one file only.** `Store+Binding.swift` is behind `#if canImport(SwiftUI)`, so
+  the rest of the library stays UI-agnostic and the coupling is visible rather than ambient.
 - **No use-case layer.** The reducer plays that role. Logic shared across features becomes a service.

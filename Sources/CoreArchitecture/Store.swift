@@ -17,9 +17,9 @@ public final class Store<State, Action>: ObservableObject {
     /// Read-only to callers; mutate it by sending an action.
     @Published public private(set) var state: State
 
-    private let _reduce: (inout State, Action) -> Effect<Action>?
+    private let reduce: (inout State, Action) -> Effect<Action>?
 
-    /// A `let` of a `Sendable` type, which is what lets `deinit` reach it without isolation.
+    /// A constant `Sendable` type, which is what lets `deinit` reach it without isolation.
     private let tasks = EffectRuntime.Tasks()
 
     /// Creates a store seeded with `initial`, reducing actions with `reduce`.
@@ -29,7 +29,7 @@ public final class Store<State, Action>: ObservableObject {
     ///   - reduce: Mutates state for an action and optionally returns work to perform. Must be pure.
     public init(initial: State, reduce: @escaping (inout State, Action) -> Effect<Action>?) {
         self.state = initial
-        self._reduce = reduce
+        self.reduce = reduce
     }
 
     deinit {
@@ -42,7 +42,11 @@ public final class Store<State, Action>: ObservableObject {
     ///
     /// The only way to mutate `state`.
     public func send(_ action: Action) {
-        guard let effect = _reduce(&state, action) else { return }
+        // Reduce the state with the given action, and obtain an optional effect from it.
+        guard let effect = reduce(&state, action) else { return }
+
+        // Run the optional effect in the runtime
+        // which reinserts an action into the loop if necessary
         EffectRuntime.run(effect, tasks: tasks) { [weak self] action in
             self?.send(action)
         }
