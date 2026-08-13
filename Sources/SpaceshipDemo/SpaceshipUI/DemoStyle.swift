@@ -84,7 +84,7 @@ extension ButtonStyle where Self == DemoButtonStyle {
 // They live in the view layer on purpose: the state layer imports only Foundation, and giving it a
 // `Color` would couple the state machine to SwiftUI for no gain.
 
-extension Spaceship.Flight.Phase {
+extension Spaceship.Phase {
 
     /// The SF Symbol standing for this phase.
     var symbolName: String {

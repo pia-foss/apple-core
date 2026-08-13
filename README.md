@@ -48,24 +48,27 @@ with the feature. This library only provides what they plug into.
 
 ## The demo
 
-[`Sources/SpaceshipDemo`](Sources/SpaceshipDemo) is a complete, compiling two-screen feature: pick a ship
-from the fleet, then launch it. It was chosen because its moments need genuinely different effect shapes
-— pre-flight checks (`task`), telemetry (`fireAndForget`), a countdown and an ascent (`stream`, under
-separate ids), launch (`merge`), and both abort and leaving the screen (`cancel`).
+[`Sources/SpaceshipDemo`](Sources/SpaceshipDemo) is a complete, compiling feature: pick a ship from the
+fleet, then launch it. It was chosen because its moments need genuinely different effect shapes —
+pre-flight checks (`task`), telemetry (`fireAndForget`), a countdown and an ascent (`stream`, under
+separate ids), launch (`merge`), and abort (`cancel`).
 
-The route lives in state, so navigation is a reducer transition and its tests assert it without a view.
-Each screen carries a focused action set: two on the master, three on the detail.
+Two screens and three stores, one per feature: the fleet list, one launch attempt, and the coordination
+between them. The navigation path lives in that third store's state, so a push, a back-swipe and a
+cross-feature result are all ordinary reducer transitions, asserted without a view.
 
 To see it: open `Package.swift` in Xcode, **select the `SpaceshipDemo` scheme**, open
-`SpaceshipView.swift`, show the canvas (`⌥⌘↩`). The scheme matters — previews only run for a file the
+`SpaceshipFlow.swift`, show the canvas (`⌥⌘↩`). The scheme matters — previews only run for a file the
 active scheme compiles. Or run `swift test --filter SpaceshipDemoTests` for the logic alone.
 
 **[The demo's own README](Sources/SpaceshipDemo/README.md)** is the guided tour: which file to read
-first, where each effect factory appears, how the tests are structured, and what the demo deliberately
-leaves out. This file explains the pattern; that one explains where to see it.
+first, why each store sits where it does, where each effect factory appears, how the tests are
+structured, and what the demo deliberately leaves out. This file explains the pattern; that one explains
+where to see it.
 
-The demo builds with the package, so it cannot drift from the library, and it is deliberately **not** a
-product — depending on this package does not expose it.
+The demo builds and is tested with the package, so it cannot drift from the library. It is a product, so
+previews and the demo scheme work — meaning a consumer of this package can see it. Depend on the
+`CoreArchitecture` product alone and nothing of the demo reaches your app.
 
 ## Writing a feature
 

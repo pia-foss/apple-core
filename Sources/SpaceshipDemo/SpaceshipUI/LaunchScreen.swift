@@ -1,27 +1,40 @@
+import CoreArchitecture
 import SwiftUI
 
 /// The detail screen: launch one ship, or abort.
 ///
-/// Two actions now that the navigation stack owns going back — the screen never dismisses itself. Every
-/// control's enabled state is a function of `flight.phase` alone, which is the practical payoff of
-/// modelling the phase as one enum.
-struct LaunchView: View {
+/// It owns its own store, so nothing hands it a `send` closure — it dispatches to its own reducer. What it
+/// does take is `onFinish`, an *output* closure: the screen reports a result upward and does not decide
+/// what anyone does with it. That is the ADR 0009 direction of travel, inverted from `send`.
+struct LaunchScreen: View {
 
-    let flight: Spaceship.Flight
-    let send: (Spaceship.Action) -> Void
+    @StateObject private var store: Store<Launch.State, Launch.Action>
+
+    /// Creates the screen and the store behind it.
+    ///
+    /// - Parameters:
+    ///   - state: The launch to start from, seeded by the flow with the fleet's last recorded result.
+    ///   - dependencies: The collaborators the reducer runs through.
+    init(state: Launch.State, dependencies: Launch.Dependencies) {
+        _store = StateObject(
+            wrappedValue: Store(
+                initial: state,
+                reduce: Launch.Reducer(dependencies: dependencies).reduce
+            )
+        )
+    }
 
     var body: some View {
         VStack(spacing: 24) {
-            // A fixed frame, so changing phase swaps the badge without shifting anything below it.
-            PhaseBadge(phase: flight.phase)
+            PhaseBadgeView(phase: store.state.phase)
                 .frame(height: 150)
 
-            Text(flight.phase.title)
+            Text(store.state.phase.title)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
 
-            AltitudeBar(altitude: flight.altitude, tint: flight.phase.tint)
+            AltitudeBarView(altitude: store.state.altitude, tint: store.state.phase.tint)
 
             controls
 
@@ -32,34 +45,31 @@ struct LaunchView: View {
     }
 
     /// The two controls, styled by what they do rather than by the current phase.
-    ///
-    /// Tinting a button by phase conflated "which state am I in" with "what will this do", and rendered
-    /// white on white whenever the phase's tint was light.
     private var controls: some View {
         HStack(spacing: 12) {
             Button {
-                send(.launchTapped)
+                store.send(.launchTapped)
             } label: {
-                Text(flight.phase == .grounded ? "Launch" : "Launch again")
+                Text(store.state.phase == .grounded ? "Launch" : "Launch again")
             }
             .buttonStyle(.launch)
-            .disabled(flight.phase.isInFlight)
+            .disabled(store.state.phase.isInFlight)
 
             Button {
-                send(.abortTapped)
+                store.send(.abortTapped)
             } label: {
                 Text("Abort")
             }
             .buttonStyle(.abort)
-            .disabled(!flight.phase.isInFlight)
+            .disabled(!store.state.phase.isInFlight)
         }
     }
 }
 
 /// The phase, as one large glyph — or as the remaining seconds during a countdown.
-private struct PhaseBadge: View {
+private struct PhaseBadgeView: View {
 
-    let phase: Spaceship.Flight.Phase
+    let phase: Spaceship.Phase
 
     var body: some View {
         ZStack {
@@ -81,7 +91,7 @@ private struct PhaseBadge: View {
 }
 
 /// Altitude as a bar rather than a moving glyph, so nothing jumps as the number changes.
-private struct AltitudeBar: View {
+private struct AltitudeBarView: View {
 
     let altitude: Int
     let tint: Color
@@ -105,26 +115,26 @@ private struct AltitudeBar: View {
 
 #if DEBUG
 
-    struct LaunchView_Previews: PreviewProvider {
+    struct LaunchScreen_Previews: PreviewProvider {
         static var previews: some View {
             ForEach(
                 [
-                    Spaceship.Flight(ship: Spaceship.Ship.demoFleet[0]),
-                    Spaceship.Flight(
-                        ship: Spaceship.Ship.demoFleet[0],
-                        phase: .countdown(secondsRemaining: 2)
-                    ),
-                    Spaceship.Flight(
-                        ship: Spaceship.Ship.demoFleet[0],
-                        phase: .ascending,
-                        altitude: 60
-                    ),
-                    Spaceship.Flight(ship: Spaceship.Ship.demoFleet[0], phase: .inOrbit, altitude: 100)
+                    Spaceship.Phase.grounded,
+                    .countdown(secondsRemaining: 2),
+                    .ascending,
+                    .inOrbit
                 ],
-                id: \.phase.title
-            ) { flight in
-                LaunchView(flight: flight, send: { _ in })
-                    .preferredColorScheme(.dark)
+                id: \.title
+            ) { phase in
+                LaunchScreen(
+                    state: Launch.State(
+                        ship: Spaceship.Ship.demoFleet[0],
+                        phase: phase,
+                        altitude: phase == .inOrbit ? 100 : 0
+                    ),
+                    dependencies: .immediate()
+                )
+                .preferredColorScheme(.dark)
             }
         }
     }

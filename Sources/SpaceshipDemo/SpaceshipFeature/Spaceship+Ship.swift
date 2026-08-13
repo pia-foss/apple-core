@@ -3,7 +3,9 @@ import Foundation
 extension Spaceship {
 
     /// One vessel in the fleet.
-    public struct Ship: Equatable, Identifiable {
+    /// `Hashable` so a `NavigationStack` path can carry whole ships rather than ids — which spares the
+    /// flow from looking a ship up in state it does not own.
+    public struct Ship: Hashable, Identifiable {
 
         /// Whether the ship can fly.
         ///
