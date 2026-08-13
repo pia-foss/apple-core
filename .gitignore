@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+xcuserdata/
+.DS_Store
+
+# A library must not pin its consumers' dependency graph.
+Package.resolved
