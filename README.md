@@ -182,7 +182,7 @@ The edit still travels through the reducer, so it is still a plain unit test:
 ```swift
 var state = Login.State()
 _ = Login.Reducer(deps: .test).reduce(&state, .emailChanged("pilot@example.com"))
-XCTAssertEqual(state.email, "pilot@example.com")
+#expect(state.email == "pilot@example.com")
 ```
 
 Two things to know:
@@ -259,8 +259,8 @@ when the claim is about the synchronous mutation, or about *whether* an effect w
 var state = Items.State()
 let effect = Items.Reducer(deps: .test).reduce(&state, .onAppear)
 
-XCTAssertTrue(state.isLoading)
-XCTAssertNotNil(effect)
+#expect(state.isLoading)
+#expect(effect != nil)
 ```
 
 Use `TestStore` when the claim is about the async round-trip. It runs the same reducer and the same
@@ -270,7 +270,8 @@ to let them in. That is what makes the round-trip assertable instead of raced.
 
 ```swift
 @MainActor
-func test_refresh() async {
+@Test
+func refresh() async {
     let spy = Spy()
     let store = TestStore(
         initial: Items.State(),
@@ -280,17 +281,17 @@ func test_refresh() async {
     store.send(.refreshTapped)
 
     let received = await store.receive()          // the effect's action, then applied
-    XCTAssertEqual(received, .itemsLoaded([.fixture]))
-    XCTAssertFalse(store.state.isLoading)
+    #expect(received == .itemsLoaded([.fixture]))
+    #expect(store.state.isLoading == false)
 
     await store.finish()                          // drain fire-and-forget work
-    XCTAssertEqual(spy.events, [.refreshTapped])
-    XCTAssertEqual(store.unconsumedActionCount, 0)
+    #expect(spy.events == [.refreshTapped])
+    #expect(store.unconsumedActionCount == 0)
 }
 ```
 
 - `receive(timeout:)` returns `nil` on timeout. Assert non-`nil` for a readable failure. It takes no
-  XCTest dependency, so it works from Swift Testing too.
+  XCTest dependency, so it works from Swift Testing (used above) or XCTest alike.
 - `finish(timeout:)` waits for in-flight effects, then cancels what is left, since a `.stream` never
   ends on its own. Use it before asserting on a spy that a fire-and-forget effect writes to.
 - `unconsumedActionCount` catches an effect that fired more times than expected.

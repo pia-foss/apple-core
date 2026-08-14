@@ -1,10 +1,11 @@
 import Combine
-import XCTest
+import Foundation
+import Testing
 
 @testable import CoreArchitecture
 
 @MainActor
-final class StoreTests: XCTestCase {
+struct StoreTests {
 
     private struct CounterState: Equatable {
         var value = 0
@@ -36,24 +37,26 @@ final class StoreTests: XCTestCase {
         }
     }
 
-    func test_pureAction_mutatesStateSynchronously() {
+    @Test
+    func pureActionMutatesStateSynchronously() {
         let store = Store(initial: CounterState(), reduce: reduce)
 
         store.send(.increment)
 
-        XCTAssertEqual(store.state, CounterState(value: 1))
+        #expect(store.state == CounterState(value: 1))
     }
 
-    func test_effect_feedsFollowUpActionBackIntoStore() async {
+    @Test
+    func effectFeedsFollowUpActionBackIntoStore() async {
         let store = Store(initial: CounterState(), reduce: reduce)
 
         store.send(.loadRequested)
         // The reducer set loading synchronously before the effect ran.
-        XCTAssertTrue(store.state.loading)
+        #expect(store.state.loading)
 
         // Wait for the effect's follow-up `.loaded` action to flow back through `send`.
         await waitFor { store.state == CounterState(value: 42, loading: false) }
-        XCTAssertEqual(store.state, CounterState(value: 42, loading: false))
+        #expect(store.state == CounterState(value: 42, loading: false))
     }
 
     // MARK: - fireAndForget
@@ -67,7 +70,8 @@ final class StoreTests: XCTestCase {
         case applied
     }
 
-    func test_fireAndForget_runsWorkWithoutProducingAnAction() async {
+    @Test
+    func fireAndForgetRunsWorkWithoutProducingAnAction() async {
         final class Spy {
             var calls = 0
         }
@@ -86,12 +90,13 @@ final class StoreTests: XCTestCase {
         store.send(.start)
 
         await waitFor { spy.calls == 1 }
-        XCTAssertEqual(spy.calls, 1)
+        #expect(spy.calls == 1)
         // No follow-up action was fed back — that is the whole point of fire-and-forget.
-        XCTAssertEqual(store.state.actionsApplied, 0)
+        #expect(store.state.actionsApplied == 0)
     }
 
-    func test_merge_startsEveryEffect() async {
+    @Test
+    func mergeStartsEveryEffect() async {
         final class Spy {
             var calls = 0
         }
@@ -113,8 +118,8 @@ final class StoreTests: XCTestCase {
         store.send(.start)
 
         await waitFor { spy.calls == 1 && store.state.actionsApplied == 1 }
-        XCTAssertEqual(spy.calls, 1)
-        XCTAssertEqual(store.state.actionsApplied, 1)
+        #expect(spy.calls == 1)
+        #expect(store.state.actionsApplied == 1)
     }
 
     // MARK: - Streams and cancellation
@@ -168,16 +173,18 @@ final class StoreTests: XCTestCase {
         }
     }
 
-    func test_stream_emitsMultipleActionsFromOneEffect() async {
+    @Test
+    func streamEmitsMultipleActionsFromOneEffect() async {
         let store = Store(initial: StreamState(), reduce: reduceStream)
 
         store.send(.start(1))
 
         await waitFor { store.state.ticks == [1, 2, 3] }
-        XCTAssertEqual(store.state.ticks, [1, 2, 3])
+        #expect(store.state.ticks == [1, 2, 3])
     }
 
-    func test_cancelByID_tearsDownTheInFlightStream() async {
+    @Test
+    func cancelByIDTearsDownTheInFlightStream() async {
         let store = Store(initial: StreamState(), reduce: reduceStream)
         store.send(.start(1))
         await waitFor { store.state.ticks == [1, 2, 3] }
@@ -185,10 +192,11 @@ final class StoreTests: XCTestCase {
         store.send(.stop)
 
         await waitFor { store.state.cancelled == [1] }
-        XCTAssertEqual(store.state.cancelled, [1])
+        #expect(store.state.cancelled == [1])
     }
 
-    func test_sameID_cancelsTheEffectAlreadyInFlight() async {
+    @Test
+    func sameIDCancelsTheEffectAlreadyInFlight() async {
         let store = Store(initial: StreamState(), reduce: reduceStream)
         store.send(.start(1))
         await waitFor { store.state.ticks == [1, 2, 3] }
@@ -197,10 +205,11 @@ final class StoreTests: XCTestCase {
         store.send(.start(2))
 
         await waitFor { store.state.cancelled == [1] }
-        XCTAssertEqual(store.state.cancelled, [1])
+        #expect(store.state.cancelled == [1])
     }
 
-    func test_distinctIDs_runConcurrently() async {
+    @Test
+    func distinctIDsRunConcurrently() async {
         let store = Store(initial: StreamState()) {
             (state: inout StreamState, action: StreamAction) -> Effect<StreamAction>? in
             switch action {
@@ -228,10 +237,11 @@ final class StoreTests: XCTestCase {
         store.send(.stop)
 
         await waitFor { store.state.cancelled.count == 2 }
-        XCTAssertEqual(Set(store.state.cancelled), [1, 2])
+        #expect(Set(store.state.cancelled) == [1, 2])
     }
 
-    func test_cancelAllEffects_stopsEverythingStillTracked() async {
+    @Test
+    func cancelAllEffectsStopsEverythingStillTracked() async {
         let store = Store(initial: StreamState(), reduce: reduceStream)
         store.send(.start(1))
         await waitFor { store.state.ticks == [1, 2, 3] }
@@ -239,7 +249,7 @@ final class StoreTests: XCTestCase {
         store.cancelAllEffects()
 
         await waitFor { store.state.cancelled == [1] }
-        XCTAssertEqual(store.state.cancelled, [1])
+        #expect(store.state.cancelled == [1])
     }
 
     // MARK: - Helpers

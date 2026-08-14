@@ -101,7 +101,7 @@ releases it and `Store.deinit` cancels whatever it had running.
 
 That is the strongest practical argument for a store per screen, and it was not free before: an earlier
 single-store version had to walk the departed ships and ground each one by hand, or the fleet row would claim
-a countdown that nothing was running. `test_poppingTheStack_needsNoCleanup` pins the current behaviour.
+a countdown that nothing was running. `poppingTheStackNeedsNoCleanup` pins the current behaviour.
 
 ## Read it in this order
 
@@ -221,31 +221,31 @@ var state = Flow.State()
 
 let effect = makeReducer().reduce(&state, .shipSelected(atlas))
 
-XCTAssertEqual(state.path, [atlas])
-XCTAssertNotNil(effect)                  // telemetry
+#expect(state.path == [atlas])
+#expect(effect != nil)                  // telemetry
 ```
 
 Navigation being state is what makes that possible — no view, no window, no navigation controller. The same
 style pins the guards down, and guards are the cheapest thing in a state machine to get wrong:
-`test_selectingShip_whileAlreadyPushed_isIgnored`, `test_launch_whileAlreadyFlying_isIgnored`,
-`test_abort_whileGrounded_isIgnored`, `test_appeared_afterLoading_doesNotRefetch`.
+`selectingShipWhileAlreadyPushedIsIgnored`, `launchWhileAlreadyFlyingIsIgnored`,
+`abortWhileGroundedIsIgnored`, `appearedAfterLoadingDoesNotRefetch`.
 
 **Use `TestStore`** when the claim is about the async round-trip. It runs the same reducer and the same effect
 machinery as `Store`, with one deliberate difference: actions produced by effects are **queued rather than
 applied**, and the test decides when to let each one in.
 
-That is what makes `test_fullFlight_reachesOrbit` possible — a whole launch asserted one action at a time,
+That is what makes `fullFlightReachesOrbit` possible — a whole launch asserted one action at a time,
 with every intermediate phase observable instead of raced past:
 
 ```swift
 store.send(.launchTapped)
-XCTAssertEqual(store.state.phase, .runningChecks)     // synchronous, before any effect ran
+#expect(store.state.phase == .runningChecks)     // synchronous, before any effect ran
 
 await assertReceives(.checksCompleted(passed: true), on: store)
 await assertReceives(.countdownTicked(secondsRemaining: 2), on: store)
 await assertReceives(.countdownTicked(secondsRemaining: 1), on: store)
 await assertReceives(.liftoff, on: store)
-XCTAssertEqual(store.state.phase, .ascending)
+#expect(store.state.phase == .ascending)
 ```
 
 Under a plain `Store` those phases would flash past in microseconds, so a test could only assert the final
@@ -258,13 +258,13 @@ waits for in-flight effects, then you assert on the spy:
 store.send(.reachedOrbit)
 await store.finish()
 
-XCTAssertEqual(spy.results, [.inOrbit])
-XCTAssertEqual(spy.telemetry, ["Orbit reached"])
+#expect(spy.results == [.inOrbit])
+#expect(spy.telemetry == ["Orbit reached"])
 ```
 
 That is also how the cross-feature handoff is tested. `reportResult` is a dependency, so
-`test_reachingOrbit_reportsTheResult` asserts on a spy exactly as telemetry does — and
-`test_abort_reportsNoResult` proves an interrupted flight reports nothing. In the app the flow wires the same
+`reachingOrbitReportsTheResult` asserts on a spy exactly as telemetry does — and
+`abortReportsNoResult` proves an interrupted flight reports nothing. In the app the flow wires the same
 closure to `Flow.Action.flightFinished`.
 
 `unconsumedActionCount` catches an effect that fired more often than you meant. Fakes are hand-rolled; there
