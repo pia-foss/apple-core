@@ -1,9 +1,9 @@
-import XCTest
+import Testing
 
 @testable import CoreArchitecture
 
 @MainActor
-final class TestStoreTests: XCTestCase {
+struct TestStoreTests {
 
     private struct LoadState: Equatable {
         var loading = false
@@ -27,37 +27,41 @@ final class TestStoreTests: XCTestCase {
         }
     }
 
-    func test_send_appliesTheSynchronousMutationOnly() async {
+    @Test
+    func sendAppliesTheSynchronousMutationOnly() async {
         let store = TestStore(initial: LoadState(), reduce: reduce)
 
         store.send(.loadRequested)
 
         // The effect's action is queued, not applied — that is what makes the round-trip assertable
         // rather than raced.
-        XCTAssertEqual(store.state, LoadState(loading: true, value: 0))
+        #expect(store.state == LoadState(loading: true, value: 0))
     }
 
-    func test_receive_returnsTheEffectsActionAndAppliesIt() async {
+    @Test
+    func receiveReturnsTheEffectsActionAndAppliesIt() async {
         let store = TestStore(initial: LoadState(), reduce: reduce)
         store.send(.loadRequested)
 
         let received = await store.receive()
 
-        XCTAssertEqual(received, .loaded(42))
-        XCTAssertEqual(store.state, LoadState(loading: false, value: 42))
-        XCTAssertEqual(store.unconsumedActionCount, 0)
+        #expect(received == .loaded(42))
+        #expect(store.state == LoadState(loading: false, value: 42))
+        #expect(store.unconsumedActionCount == 0)
     }
 
-    func test_receive_returnsNilWhenNoActionArrivesBeforeTheTimeout() async {
+    @Test
+    func receiveReturnsNilWhenNoActionArrivesBeforeTheTimeout() async {
         let store = TestStore(initial: LoadState(), reduce: reduce)
 
         // Nothing was sent, so no effect is running and nothing will ever arrive.
         let received = await store.receive(timeout: 0.05)
 
-        XCTAssertNil(received)
+        #expect(received == nil)
     }
 
-    func test_streamActions_areReceivedInOrder() async {
+    @Test
+    func streamActionsAreReceivedInOrder() async {
         struct State: Equatable {
             var ticks: [Int] = []
         }
@@ -85,13 +89,14 @@ final class TestStoreTests: XCTestCase {
 
         for expected in 1...3 {
             let received = await store.receive()
-            XCTAssertEqual(received, .tick(expected))
+            #expect(received == .tick(expected))
         }
-        XCTAssertEqual(store.state.ticks, [1, 2, 3])
+        #expect(store.state.ticks == [1, 2, 3])
         await store.finish()
     }
 
-    func test_finish_drainsFireAndForgetWorkBeforeAssertingOnASpy() async {
+    @Test
+    func finishDrainsFireAndForgetWorkBeforeAssertingOnASpy() async {
         final class Spy {
             var calls: [String] = []
         }
@@ -111,10 +116,11 @@ final class TestStoreTests: XCTestCase {
         store.send(.declineTapped)
         await store.finish()
 
-        XCTAssertEqual(spy.calls, ["declined"])
+        #expect(spy.calls == ["declined"])
     }
 
-    func test_unconsumedActionCount_revealsAnEffectThatFiredMoreThanExpected() async {
+    @Test
+    func unconsumedActionCountRevealsAnEffectThatFiredMoreThanExpected() async {
         struct State: Equatable {
             var ticks = 0
         }
@@ -141,8 +147,8 @@ final class TestStoreTests: XCTestCase {
         _ = await store.receive()
 
         // One action consumed, one still queued — the assertion that catches an over-firing effect.
-        XCTAssertEqual(store.state.ticks, 1)
-        XCTAssertEqual(store.unconsumedActionCount, 1)
+        #expect(store.state.ticks == 1)
+        #expect(store.unconsumedActionCount == 1)
         await store.finish()
     }
 }

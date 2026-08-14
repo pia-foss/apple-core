@@ -1,5 +1,5 @@
 import CoreArchitecture
-import XCTest
+import Testing
 
 @testable import SpaceshipDemo
 
@@ -9,7 +9,7 @@ import XCTest
 /// mention: no navigation, no results, no countdown. None of that is the fleet's, so none of it is in scope
 /// here — which is the clearest argument for a store per screen.
 @MainActor
-final class FleetReducerTests: XCTestCase {
+struct FleetReducerTests {
 
     private let atlas = Spaceship.Ship(id: "atlas", name: "Atlas", readiness: .ready)
     private let cygnus = Spaceship.Ship(id: "cygnus", name: "Cygnus", readiness: .inMaintenance)
@@ -18,43 +18,47 @@ final class FleetReducerTests: XCTestCase {
         Fleet.Reducer(dependencies: .immediate())
     }
 
-    func test_appeared_loadsTheShips() async {
+    @Test
+    func appearedLoadsTheShips() async {
         let store = TestStore(
             initial: Fleet.State(),
             reduce: Fleet.Reducer(dependencies: .immediate(ships: [atlas, cygnus])).reduce
         )
 
         store.send(.appeared)
-        XCTAssertTrue(store.state.isLoading)
+        #expect(store.state.isLoading)
 
         let received = await store.receive()
 
-        XCTAssertEqual(received, .shipsLoaded([atlas, cygnus]))
-        XCTAssertEqual(store.state.ships, [atlas, cygnus])
-        XCTAssertFalse(store.state.isLoading)
+        #expect(received == .shipsLoaded([atlas, cygnus]))
+        #expect(store.state.ships == [atlas, cygnus])
+        #expect(store.state.isLoading == false)
     }
 
     /// The screen's store outlives a push, so coming back re-triggers `appeared`.
     ///
     /// Refetching then would throw away a list the pilot is already looking at.
-    func test_appeared_afterLoading_doesNotRefetch() {
+    @Test
+    func appearedAfterLoadingDoesNotRefetch() {
         var state = Fleet.State(ships: [atlas])
 
-        XCTAssertNil(makeReducer().reduce(&state, .appeared))
+        #expect(makeReducer().reduce(&state, .appeared) == nil)
     }
 
-    func test_appeared_whileLoading_doesNotRefetch() {
+    @Test
+    func appearedWhileLoadingDoesNotRefetch() {
         var state = Fleet.State(isLoading: true)
 
-        XCTAssertNil(makeReducer().reduce(&state, .appeared))
+        #expect(makeReducer().reduce(&state, .appeared) == nil)
     }
 
-    func test_shipsLoaded_clearsTheLoadingFlag() {
+    @Test
+    func shipsLoadedClearsTheLoadingFlag() {
         var state = Fleet.State(isLoading: true)
 
         _ = makeReducer().reduce(&state, .shipsLoaded([atlas]))
 
-        XCTAssertEqual(state.ships, [atlas])
-        XCTAssertFalse(state.isLoading)
+        #expect(state.ships == [atlas])
+        #expect(state.isLoading == false)
     }
 }

@@ -1,5 +1,5 @@
 import CoreArchitecture
-import XCTest
+import Testing
 
 @testable import SpaceshipDemo
 
@@ -9,7 +9,7 @@ import XCTest
 /// the same state would sit in a `Coordinator`, where none of these assertions would be possible without a
 /// window.
 @MainActor
-final class FlowReducerTests: XCTestCase {
+struct FlowReducerTests {
 
     private let atlas = Spaceship.Ship(id: "atlas", name: "Atlas", readiness: .ready)
     private let cygnus = Spaceship.Ship(id: "cygnus", name: "Cygnus", readiness: .inMaintenance)
@@ -21,52 +21,57 @@ final class FlowReducerTests: XCTestCase {
     // MARK: - Navigation
 
     /// The fleet screen reports a selection; deciding it means a push happens here.
-    func test_selectingShip_pushesIt() {
+    @Test
+    func selectingShipPushesIt() {
         var state = Flow.State()
 
         let effect = makeReducer().reduce(&state, .shipSelected(atlas))
 
-        XCTAssertEqual(state.path, [atlas])
-        XCTAssertNotNil(effect)  // telemetry
+        #expect(state.path == [atlas])
+        #expect(effect != nil)  // telemetry
     }
 
-    func test_selectingShip_whileAlreadyPushed_isIgnored() {
+    @Test
+    func selectingShipWhileAlreadyPushedIsIgnored() {
         var state = Flow.State(path: [atlas])
 
-        XCTAssertNil(makeReducer().reduce(&state, .shipSelected(cygnus)))
-        XCTAssertEqual(state.path, [atlas])
+        #expect(makeReducer().reduce(&state, .shipSelected(cygnus)) == nil)
+        #expect(state.path == [atlas])
     }
 
     /// Popping needs no cleanup, which is the point of a store per screen.
     ///
     /// The launch store belongs to the pushed screen, so popping releases it and `Store.deinit` cancels
     /// whatever it had running. This reducer has nothing to cancel and returns no effect.
-    func test_poppingTheStack_needsNoCleanup() {
+    @Test
+    func poppingTheStackNeedsNoCleanup() {
         var state = Flow.State(path: [atlas])
 
         let effect = makeReducer().reduce(&state, .pathChanged([]))
 
-        XCTAssertEqual(state.path, [])
-        XCTAssertNil(effect)
+        #expect(state.path == [])
+        #expect(effect == nil)
     }
 
     /// A back-swipe is handled exactly like any other action.
     ///
     /// SwiftUI writes the shorter path through `store.binding`, which arrives here as `.pathChanged`. Routing
     /// it through a reducer is what makes a system gesture testable at all.
-    func test_aSwipeBackPopsTheStack() {
+    @Test
+    func aSwipeBackPopsTheStack() {
         var state = Flow.State(path: [atlas])
 
         _ = makeReducer().reduce(&state, .pathChanged([]))
 
-        XCTAssertTrue(state.path.isEmpty)
+        #expect(state.path.isEmpty)
     }
 
-    func test_pathChanged_toTheSamePath_isIgnored() {
+    @Test
+    func pathChangedToTheSamePathIsIgnored() {
         var state = Flow.State(path: [atlas])
 
         // SwiftUI can write the binding with an unchanged value; doing work for that would be waste.
-        XCTAssertNil(makeReducer().reduce(&state, .pathChanged([atlas])))
+        #expect(makeReducer().reduce(&state, .pathChanged([atlas])) == nil)
     }
 
     // MARK: - Cross-feature results
@@ -75,15 +80,17 @@ final class FlowReducerTests: XCTestCase {
     ///
     /// `Launch` reports through a dependency, so the result reaches here as an ordinary action — exactly as a
     /// network response would.
-    func test_aReportedResultIsRecorded() {
+    @Test
+    func aReportedResultIsRecorded() {
         var state = Flow.State()
 
         _ = makeReducer().reduce(&state, .flightFinished(shipID: atlas.id, phase: .inOrbit))
 
-        XCTAssertEqual(state.results[atlas.id], .inOrbit)
+        #expect(state.results[atlas.id] == .inOrbit)
     }
 
-    func test_aLaterResultReplacesTheEarlierOne() {
+    @Test
+    func aLaterResultReplacesTheEarlierOne() {
         var state = Flow.State(results: [atlas.id: .inOrbit])
 
         _ = makeReducer().reduce(
@@ -91,10 +98,11 @@ final class FlowReducerTests: XCTestCase {
             .flightFinished(shipID: atlas.id, phase: .checksFailed(reason: "x"))
         )
 
-        XCTAssertEqual(state.results[atlas.id], .checksFailed(reason: "x"))
+        #expect(state.results[atlas.id] == .checksFailed(reason: "x"))
     }
 
-    func test_selectingShip_reportsTelemetry() async {
+    @Test
+    func selectingShipReportsTelemetry() async {
         let spy = Spy()
         let store = TestStore(
             initial: Flow.State(),
@@ -104,7 +112,7 @@ final class FlowReducerTests: XCTestCase {
         store.send(.shipSelected(atlas))
         await store.finish()
 
-        XCTAssertEqual(spy.telemetry, ["Selected Atlas"])
-        XCTAssertEqual(store.unconsumedActionCount, 0)
+        #expect(spy.telemetry == ["Selected Atlas"])
+        #expect(store.unconsumedActionCount == 0)
     }
 }
