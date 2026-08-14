@@ -21,7 +21,7 @@ iOS 15+, macOS 12+, tvOS 15+, watchOS 8+, visionOS 1+. Swift 5.9.
 ## Installation
 
 ```swift
-.package(url: "https://github.com/xvpn/apple_architecture.git", .upToNextMinor(from: "0.1.0"))
+.package(url: "https://github.com/pia-foss/apple-core", .upToNextMinor(from: "0.1.0"))
 ```
 
 Then add `CoreArchitecture` to your target's dependencies.
