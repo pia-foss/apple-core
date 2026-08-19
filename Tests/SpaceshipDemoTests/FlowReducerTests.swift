@@ -6,7 +6,7 @@ import Testing
 /// The coordination feature, tested on its own.
 ///
 /// This is the store that exists so navigation and cross-feature results stay reducer-tested. In a UIKit app
-/// the same state would sit in a `Coordinator`, where none of these assertions would be possible without a
+/// the same state would sit in a `FlowCoordinator`, where none of these assertions would be possible without a
 /// window.
 @MainActor
 struct FlowReducerTests {

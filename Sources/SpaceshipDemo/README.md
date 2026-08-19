@@ -18,6 +18,10 @@ The demo builds and is tested with the package, so it cannot drift from the libr
    `CoreArchitecture-Package` works too, since it builds everything.
 3. Open `SpaceshipFlow.swift` and show the canvas (`⌥⌘↩`).
 
+For the UIKit coordinator instead, open `DemoRootCoordinator.swift` and preview that. Its canvas needs an
+**iOS** run destination: the file is behind `#if canImport(UIKit)`, so on My Mac it compiles to nothing and
+the preview has no view to show.
+
 The preview runs on **`.live`** dependencies, so the countdown really takes a second per tick and Abort is
 tappable while it does. `.immediate` belongs in tests: with `wait` a no-op the whole flight finishes inside a
 frame or two, so the canvas shows only the final phase and every in-flight control is disabled before you can
@@ -105,7 +109,9 @@ a countdown that nothing was running. `poppingTheStackNeedsNoCleanup` pins the c
 
 ## Read it in this order
 
-Two folders. `SpaceshipFeature/` holds everything a second app could reuse; `SpaceshipUI/` holds the views.
+Three folders. `SpaceshipFeature/` holds everything a second app could reuse, `SpaceshipUI/` holds the views,
+and `SpaceshipNavigation/` holds the UIKit coordinators. Read the first two in order; the third is optional,
+and only interesting once the declarative flow makes sense.
 
 **`SpaceshipFeature/`** — no SwiftUI:
 
@@ -127,6 +133,13 @@ Two folders. `SpaceshipFeature/` holds everything a second app could reuse; `Spa
 | 9 | `SpaceshipFlow.swift` | Not a screen — it renders none of its own. Owns the `Flow` store, binds the `NavigationStack` path to it, and builds each `LaunchScreen`. |
 | 10 | `DemoStyle.swift` | Presentation values for the domain enums, kept in the UI folder so the feature layer never imports SwiftUI. |
 | 11 | `../../Tests/SpaceshipDemoTests/` | One file per store, below. |
+
+**`SpaceshipNavigation/`** — UIKit, and optional:
+
+| # | File | What to notice |
+|---|---|---|
+| 12 | `Spaceship+Coordinator.swift` | The same two screens on a `UINavigationController`. `refreshFleet()` is the cost of holding coordination state outside a store. |
+| 13 | `DemoRootCoordinator.swift` | The parent half: retain, subscribe, cancel-before-replace. Declares no `Output`, because a root reports to nobody. |
 
 `TelemetryLog.swift` is scaffolding rather than pattern: a visible stand-in for an analytics backend, so the
 demo can *show* what `fireAndForget` does. In a real feature nothing would render it — and note that no
@@ -152,9 +165,10 @@ wrong type at the call site.
 ## On layering
 
 `SpaceshipFeature/` and `SpaceshipUI/` are the two layers the pattern separates: logic that could be shared
-across apps, and the views of one. In a real project they would be separate SPM targets, and the split would
-be worth it — a target boundary makes the dependency direction a **build error**, so a reducer could not
-reference a view even by accident.
+across apps, and the views of one. `SpaceshipNavigation/` sits with the views — a coordinator names concrete
+screens and imports UIKit, so it is as per-app as they are. In a real project these would be separate SPM
+targets, and the split would be worth it — a target boundary makes the dependency direction a **build error**,
+so a reducer could not reference a view even by accident.
 
 Here they are folders in one target, which keeps the demo to a single scheme. The cost is real: nothing stops
 a view and a reducer referencing each other, so the layering holds by convention and review rather than by
@@ -164,9 +178,11 @@ That distinction is not academic. While these were briefly two targets, the buil
 feature tests borrowing `TelemetryLog` — a UI type — as a telemetry spy. They now hand-roll their own `Spy`,
 which is what the project's no-mocking-framework rule asks for anyway.
 
-## On navigation: a router, not a coordinator
+## On navigation: a router and a coordinator
 
-The path lives in `Flow.State` and a real `NavigationStack` binds to it:
+The demo shows both, because the library supports both and the choice is a real one.
+
+**Declarative — the router.** The path lives in `Flow.State` and a real `NavigationStack` binds to it:
 
 ```swift
 NavigationStack(path: flowStore.binding(\.path) { .pathChanged($0) }) { … }
@@ -177,20 +193,28 @@ into a feature — they change the stack, `store.binding` turns that into `.path
 to react. A gesture the feature cannot see is how a hand-rolled architecture ends up with a stream ticking
 into a screen nobody is looking at.
 
-**The demo deliberately does not use the library's `Coordinator` protocol.** That protocol is the UIKit
-contract — `AnyObject` plus `start()` — and it is shaped that way because a UIKit coordinator has to
-imperatively push a first view controller. A SwiftUI `View` is a struct and is never "started", so conforming
-would be ceremony. Where navigation is fully declarative, the coordinator's job is done by state, and this
-demo is that case.
+**Imperative — the coordinator.** `SpaceshipNavigation/` pushes the same two screens onto a
+`UINavigationController` through `FlowCoordinator`, behind `#if canImport(UIKit) && !os(watchOS)` so the
+declarative path stays available on every platform the package supports.
+
+Read the two side by side and the trade becomes concrete. `Flow` keeps the path and each ship's last result in
+reducer state, so `FlowReducerTests` asserts a push, a back-swipe and a cross-feature result without a window.
+`Spaceship.Coordinator` holds the same facts in plain properties and pays for it in `refreshFleet()`: the
+fleet screen was handed a snapshot, so a finished flight has to be pushed back into the hosted view by hand.
+The store version re-renders for free.
+
+`DemoRootCoordinator` is the parent half — retain the child, subscribe before starting it, cancel the
+outgoing subscription first. Those three are what review has to catch, so they are worth seeing written out.
+It also shows the other side of `Output`: a root reports to nobody, so it declares none and inherits the
+`Never` default.
 
 The two are not rivals: a coordinator is what you reach for while root navigation is still UIKit-hosted, and
 a router is where it lands once the stack itself is declarative.
 
 What the demo keeps either way is the principle, which is the same in both: **a screen never knows what comes
-next.** Screens expose output closures and the layer above decides.
-
-Showing the coordinator path properly needs a UIKit host and a `UIHostingController` bridge, which would make
-the demo iOS-only. That belongs in a separate demo.
+next.** Screens expose output closures and the layer above decides — `FleetScreen.onSelect` becomes
+`Flow.Action.shipSelected` in one and a `showLaunch(for:)` call in the other, and the screen cannot tell
+which.
 
 ## Where each effect factory appears
 
@@ -278,7 +302,9 @@ cancellation work — the reducer's contract, not the runtime's.
 
 So it isn't mistaken for a complete template:
 
-- **No `Coordinator`.** See *On navigation* above. It needs a UIKit host, which would make the demo iOS-only.
+- **No coordinator tests worth the name.** See *On navigation* above: that is the finding, not an omission.
+  `SpaceshipNavigation/` is covered by what a window-less test can reach, which is much less than
+  `FlowReducerTests` reaches for the same transitions.
 - **No error states.** `FleetRepository.all()` cannot fail. A repository that throws would add a loading-error
   branch to `Fleet.State` — realistic, and beside the point being made here.
 - **No real I/O.** The repository returns a literal and the service reads a flag. Swapping either for a
