@@ -9,7 +9,6 @@ import Testing
 ///
 /// Those are compile-time claims, so the declarations below are the real assertions — the runtime
 /// checks confirm the wiring they imply.
-@Suite("Flow coordinator")
 struct FlowCoordinatorTests {
 
     /// A flow with nobody above it to report to, conforming with only `start()`.
@@ -38,7 +37,8 @@ struct FlowCoordinatorTests {
         }
     }
 
-    @Test func flowWithNoOutput_startsWithoutDeclaringOne() {
+    @Test
+    func flowWithNoOutputStartsWithoutDeclaringOne() {
         let coordinator = Coordinator()
 
         coordinator.start()
@@ -51,7 +51,8 @@ struct FlowCoordinatorTests {
     ///
     /// Completion is the only thing worth asserting: `Output == Never` already makes a value
     /// unrepresentable, so `receiveValue` is uninhabited rather than merely unexercised.
-    @Test func defaultOutput_completesImmediately() {
+    @Test
+    func defaultOutputCompletesImmediately() {
         var didComplete = false
 
         let token = Coordinator().output.sink(
@@ -64,7 +65,8 @@ struct FlowCoordinatorTests {
     }
 
     /// The nested `Output` wins the name lookup, so the flow reports its own cases.
-    @Test func flowWithNestedOutput_deliversItsOwnCases() {
+    @Test
+    func flowWithNestedOutputDeliversItsOwnCases() {
         let coordinator = Onboarding.Coordinator()
         var received: [Onboarding.Output] = []
         let token = coordinator.output.sink { received.append($0) }
@@ -77,7 +79,8 @@ struct FlowCoordinatorTests {
 
     /// A parent can subscribe without knowing the concrete coordinator, which is what makes the
     /// requirement worth stating on a protocol at all.
-    @Test func outputIsReachableGenerically() {
+    @Test
+    func outputIsReachableGenerically() {
         let coordinator = Onboarding.Coordinator()
         var received: [Onboarding.Output] = []
 
@@ -91,7 +94,8 @@ struct FlowCoordinatorTests {
     /// A parent can hold children of differing flows in one collection, despite the associated type.
     ///
     /// Reaching `output` on one of them needs a generic context, as `subscribe(to:handle:)` provides.
-    @Test func flowsOfDifferingOutputsShareACollection() {
+    @Test
+    func flowsOfDifferingOutputsShareACollection() {
         let reporting = Onboarding.Coordinator()
         let silent = Coordinator()
         let children: [any FlowCoordinator] = [reporting, silent]

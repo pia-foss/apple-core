@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// It owns its own store, so nothing hands it a `send` closure — it dispatches to its own reducer. What it
 /// does take is `onFinish`, an *output* closure: the screen reports a result upward and does not decide
-/// what anyone does with it. That is the ADR 0009 direction of travel, inverted from `send`.
+/// what anyone does with it. That is the output-closure direction of travel, inverted from `send`.
 struct LaunchScreen: View {
 
     @StateObject private var store: Store<Launch.State, Launch.Action>
