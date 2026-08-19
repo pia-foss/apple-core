@@ -7,7 +7,7 @@ import Foundation
 /// each own a screen's own state; neither can own *navigation between them*, and neither can own a fact the
 /// other produces. Both of those belong to whoever coordinates — here, `SpaceshipFlow`.
 ///
-/// In a UIKit app this state is what a `Coordinator` would hold. Keeping it in a store instead means the
+/// In a UIKit app this state is what a `FlowCoordinator` would hold. Keeping it in a store instead means the
 /// transitions are reducer-tested like any others.
 public enum Flow {}
 

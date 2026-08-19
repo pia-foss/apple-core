@@ -35,7 +35,8 @@ let package = Package(
             dependencies: ["CoreArchitecture"]
         ),
         // A worked example. One target, with `SpaceshipFeature/` and `SpaceshipUI/` holding the two layers
-        // ADR 0010 separates: shared logic and per-app views.
+        // ADR 0010 separates: shared logic and per-app views. `SpaceshipNavigation/` holds the UIKit
+        // coordinators, which are per-app for the same reason the views are.
         //
         // The folders are a convention, not a boundary the compiler checks — a view and a reducer in one
         // target can reference each other freely. Splitting them into two targets would make the

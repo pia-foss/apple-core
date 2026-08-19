@@ -41,7 +41,7 @@ Every guarantee this library offers rests on these. They are not style preferenc
 | `Store<State, Action>` | `@MainActor ObservableObject`. Holds state, runs `send`, executes effects, feeds their actions back. Supplies `binding(_:send:)` for SwiftUI controls. |
 | `Effect<Action>` | A description of async work a reducer returns. Cancellable by id. |
 | `TestStore<State, Action>` | Deterministic test driver. Same effect machinery, but effect output is queued for the test. `DEBUG`-only. |
-| `Coordinator` | The navigation contract: `func start()`. |
+| `FlowCoordinator` | The navigation contract: `func start()`, plus the `output` publisher a flow reports results on. |
 
 `State`, `Action`, `Reducer` and `Dependencies` are **not** here. They are per-feature types that live
 with the feature. This library only provides what they plug into.
@@ -301,7 +301,7 @@ closures.
 
 ## Navigation
 
-`Coordinator` is the whole contract: `func start()`. A screen never knows what comes next. Views and
+`FlowCoordinator` is the whole contract: `func start()`. A screen never knows what comes next. Views and
 view controllers hold no coordinator reference — they expose output closures the coordinator injects,
 and the coordinator decides the transition. UIKit and SwiftUI use the identical pattern; the
 `UIHostingController` wrap is a coordinator detail.
@@ -311,7 +311,7 @@ its `Store` and handing it to the feature view.
 
 ```swift
 @MainActor
-final class ItemsCoordinator: Coordinator {
+final class ItemsCoordinator: FlowCoordinator {
     enum Output { case didSelect(Item) }
 
     private let subject = PassthroughSubject<Output, Never>()
@@ -327,9 +327,18 @@ final class ItemsCoordinator: Coordinator {
 }
 ```
 
-`start()` is the only requirement. Child-flow storage and subscription bags belong to the concrete
-coordinators that need them: not every coordinator has children, not every one uses Combine, and a
-protocol cannot supply stored properties anyway.
+`start()` and `output` are the whole contract. A flow with nobody above it to report to — an app root,
+or a leaf whose parent needs no result — declares neither an `Output` nor a publisher: `Output`
+defaults to `Never` and an extension supplies a publisher that completes immediately.
+
+```swift
+final class AppCoordinator: FlowCoordinator {
+    func start() { /* installs the first shell; reports to nobody */ }
+}
+```
+
+Child-flow storage and subscription bags are not on the protocol: not every coordinator has children,
+and a protocol cannot supply stored properties anyway.
 
 Discipline the compiler will not enforce, so review must:
 
@@ -358,6 +367,8 @@ Nothing in the build system enforces these.
 
 **Navigation**
 - [ ] The screen exposes output closures; it holds no coordinator reference and decides nothing.
+- [ ] A flow that reports upward declares a real `Output`. Relying on the `Never` default is a claim
+      that nobody is listening, not a shortcut past writing the publisher.
 - [ ] Every injected closure captures `self` as `weak`.
 - [ ] Subscriptions are stored, and cancelled before a child coordinator is replaced.
 
