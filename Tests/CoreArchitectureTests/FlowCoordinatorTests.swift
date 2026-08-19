@@ -1,5 +1,5 @@
 import Combine
-import XCTest
+import Testing
 
 @testable import CoreArchitecture
 
@@ -9,7 +9,8 @@ import XCTest
 ///
 /// Those are compile-time claims, so the declarations below are the real assertions — the runtime
 /// checks confirm the wiring they imply.
-final class FlowCoordinatorTests: XCTestCase {
+@Suite("Flow coordinator")
+struct FlowCoordinatorTests {
 
     /// A flow with nobody above it to report to, conforming with only `start()`.
     ///
@@ -37,12 +38,12 @@ final class FlowCoordinatorTests: XCTestCase {
         }
     }
 
-    func test_flowWithNoOutput_startsWithoutDeclaringOne() {
+    @Test func flowWithNoOutput_startsWithoutDeclaringOne() {
         let coordinator = Coordinator()
 
         coordinator.start()
 
-        XCTAssertTrue(coordinator.didStart)
+        #expect(coordinator.didStart)
     }
 
     /// The default publisher reports completion rather than staying open, so a parent that subscribes
@@ -50,7 +51,7 @@ final class FlowCoordinatorTests: XCTestCase {
     ///
     /// Completion is the only thing worth asserting: `Output == Never` already makes a value
     /// unrepresentable, so `receiveValue` is uninhabited rather than merely unexercised.
-    func test_defaultOutput_completesImmediately() {
+    @Test func defaultOutput_completesImmediately() {
         var didComplete = false
 
         let token = Coordinator().output.sink(
@@ -58,46 +59,46 @@ final class FlowCoordinatorTests: XCTestCase {
             receiveValue: { _ in }
         )
 
-        XCTAssertTrue(didComplete)
+        #expect(didComplete)
         token.cancel()
     }
 
     /// The nested `Output` wins the name lookup, so the flow reports its own cases.
-    func test_flowWithNestedOutput_deliversItsOwnCases() {
+    @Test func flowWithNestedOutput_deliversItsOwnCases() {
         let coordinator = Onboarding.Coordinator()
         var received: [Onboarding.Output] = []
         let token = coordinator.output.sink { received.append($0) }
 
         coordinator.start()
 
-        XCTAssertEqual(received, [.didFinish(name: "Ada")])
+        #expect(received == [.didFinish(name: "Ada")])
         token.cancel()
     }
 
     /// A parent can subscribe without knowing the concrete coordinator, which is what makes the
     /// requirement worth stating on a protocol at all.
-    func test_outputIsReachableGenerically() {
+    @Test func outputIsReachableGenerically() {
         let coordinator = Onboarding.Coordinator()
         var received: [Onboarding.Output] = []
 
         let token = subscribe(to: coordinator) { received.append($0) }
         coordinator.start()
 
-        XCTAssertEqual(received, [.didFinish(name: "Ada")])
+        #expect(received == [.didFinish(name: "Ada")])
         token.cancel()
     }
 
     /// A parent can hold children of differing flows in one collection, despite the associated type.
     ///
     /// Reaching `output` on one of them needs a generic context, as `subscribe(to:handle:)` provides.
-    func test_flowsOfDifferingOutputsShareACollection() {
+    @Test func flowsOfDifferingOutputsShareACollection() {
         let reporting = Onboarding.Coordinator()
         let silent = Coordinator()
         let children: [any FlowCoordinator] = [reporting, silent]
 
         children.forEach { $0.start() }
 
-        XCTAssertTrue(silent.didStart)
+        #expect(silent.didStart)
     }
 
     private func subscribe<C: FlowCoordinator>(
